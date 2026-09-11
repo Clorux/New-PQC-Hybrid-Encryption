@@ -1,0 +1,279 @@
+/* --- General Styling & Dark Theme --- */
+:root {
+    --bg-color: #1a1a2e;
+    --primary-color: #16213e;
+    --secondary-color: #0f3460;
+    --accent-color: #e94560;
+    --accent-hover-color: #ff5777;
+    --success-color: #28a745;
+    --text-color: #dcdcdc;
+    --border-color: #535353;
+    /* Warna fokus yang lebih nyaman */
+    --focus-border-color: #87b2f3; 
+    --focus-shadow-color: rgba(135, 178, 243, 0.6);
+    --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    --font-mono: 'Courier New', Courier, monospace;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+/* --- Main Container --- */
+.container {
+    width: 100%;
+    max-width: 800px;
+    background-color: var(--primary-color);
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--secondary-color);
+}
+
+/* --- Header --- */
+header {
+    text-align: center;
+    margin-bottom: 25px;
+    border-bottom: 1px solid var(--secondary-color);
+    padding-bottom: 20px;
+}
+
+header h1 {
+    color: var(--accent-color);
+    font-size: 2.2rem;
+    margin-bottom: 5px;
+}
+
+header p {
+    font-size: 1rem;
+    color: var(--text-color);
+    opacity: 0.8;
+}
+
+/* --- Section Headers --- */
+.content-section h2 {
+    font-size: 1.5rem;
+    color: var(--text-color);
+    margin-bottom: 10px;
+    border-left: 4px solid var(--accent-color);
+    padding-left: 10px;
+}
+
+.content-section .description {
+    font-size: 0.95rem;
+    opacity: 0.7;
+    margin-bottom: 25px;
+    line-height: 1.5;
+}
+
+/* --- Tab Navigation --- */
+.tabs {
+    display: flex;
+    margin-bottom: 30px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.tab-button {
+    flex: 1;
+    padding: 15px;
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    font-weight: 600;
+    transition: background-color 0.3s;
+    text-align: center;
+}
+
+.tab-button:not(:last-child) {
+    border-right: 1px solid var(--border-color);
+}
+
+.tab-button.active {
+    background-color: var(--accent-color);
+    color: #fff;
+}
+
+.tab-button:hover:not(.active) {
+    background-color: #1e4a83;
+}
+
+.content-section {
+    display: none;
+}
+.content-section.active {
+    display: block;
+}
+
+/* --- Form Elements --- */
+.input-group {
+    margin-bottom: 25px;
+}
+
+textarea {
+    width: 100%;
+    padding: 12px;
+    background-color: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    resize: vertical;
+    min-height: 120px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+/* Mengganti warna fokus menjadi biru muda */
+textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--focus-border-color);
+    box-shadow: 0 0 8px var(--focus-shadow-color);
+}
+
+textarea::placeholder {
+    color: #888;
+}
+
+/* --- Buttons --- */
+.action-button {
+    width: 100%;
+    padding: 15px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #fff;
+    background-color: var(--accent-color);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.2s;
+    margin-top: 10px;
+}
+
+.action-button:hover {
+    background-color: var(--accent-hover-color);
+    transform: translateY(-2px);
+}
+
+.action-button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* --- Output Section --- */
+.output-group {
+    position: relative; 
+}
+
+/* Gaya khusus untuk textarea yang memiliki tombol salin */
+.output-group textarea {
+    background-color: #101522;
+    padding-right: 75px; 
+}
+
+.copy-button {
+    position: absolute;
+    /* [DIUBAH] Posisi lebih ke pojok */
+    top: 6px;
+    right: 6px;
+    
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ccc;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: var(--font-family);
+    /* [DIUBAH] Dibuat lebih transparan */
+    opacity: 0.6; 
+    transition: all 0.2s ease-in-out;
+}
+
+.copy-button:hover {
+    opacity: 1;
+    background-color: var(--accent-color);
+    color: #fff;
+    border-color: var(--accent-color);
+    transform: scale(1.05);
+}
+
+.copy-button.copied {
+    opacity: 1;
+    background-color: var(--success-color);
+    color: #fff;
+    border-color: var(--success-color);
+}
+
+/* --- Fingerprint Display (Verifikasi Anti-MITM) --- */
+.fingerprint-group {
+    margin-top: 14px;
+}
+
+.fingerprint-box {
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    letter-spacing: 1px;
+    word-break: break-all;
+    background-color: #101522;
+    border: 1px dashed var(--focus-border-color);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--focus-border-color);
+}
+
+.fingerprint-hint {
+    font-size: 0.8rem;
+    opacity: 0.65;
+    line-height: 1.5;
+    margin-top: 8px;
+}
+
+/* --- Footer --- */
+footer {
+    text-align: center;
+    margin-top: 30px;
+    font-size: 0.9em;
+    opacity: 0.6;
+}
+
+/* --- Responsive Design --- */
+@media (max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+    .container {
+        padding: 20px;
+    }
+    header h1 {
+        font-size: 1.8rem;
+    }
+    .tab-button {
+        font-size: 0.9rem;
+        padding: 12px 5px;
+    }
+}
