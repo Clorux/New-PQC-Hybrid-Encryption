@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q-EKH Protocol</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Gaya tambahan untuk halaman 'Tentang' */
+        .content-section .about-intro { font-size: 1.1em; font-style: italic; color: var(--accent-color); text-align: center; margin-bottom: 25px; }
+        .content-section h3 { font-size: 1.3rem; color: var(--text-color); margin-top: 30px; margin-bottom: 15px; border-left: 3px solid var(--accent-color); padding-left: 10px; }
+        .content-section ul, .content-section ol { padding-left: 20px; margin-bottom: 20px; }
+        .content-section li { margin-bottom: 12px; line-height: 1.6; }
+        .content-section blockquote { border-left: 4px solid var(--secondary-color); padding-left: 15px; margin: 20px 0; font-style: italic; color: #b0b0b0; }
+        .content-section .warning { color: #ffc107; font-weight: bold; }
+        .content-section .important-notice { background-color: rgba(255, 193, 7, 0.08); border: 1px solid rgba(255, 193, 7, 0.35); border-radius: 8px; padding: 15px 20px; margin: 25px 0; }
+        .content-section .important-notice h3 { margin-top: 0; border-left: none; padding-left: 0; color: #ffc107; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Q-EKH Protocol</h1>
+            <p>Enkripsi hibrida pasca-kuantum (ECDH P-384 + ML-KEM Kyber768).</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-button active" data-tab="generate">1. Buat Kunci</button>
+            <button class="tab-button" data-tab="encrypt">2. Enkripsi</button>
+            <button class="tab-button" data-tab="decrypt">3. Dekripsi</button>
+            <button class="tab-button" data-tab="about">4. Tentang</button>
+        </div>
+
+        <main>
+            <div id="generate-view" class="content-section active">
+                <h2>Pembuatan Pasangan Kunci Hibrida</h2>
+                <p class="description">Buat pasangan kunci gabungan (ECC + Kyber). Simpan Kunci Privat Anda dengan sangat aman dan bagikan Kunci Publik kepada pengirim pesan.</p>
+                <button id="generateBtn" class="action-button">Buat Pasangan Kunci Hibrida Baru</button>
+                
+                <div class="input-group" style="margin-top: 30px;">
+                    <label for="genPublicKey">Kunci Publik Hibrida (JSON - Bagikan ini)</label>
+                    <div class="output-group">
+                        <textarea id="genPublicKey" rows="7" readonly placeholder="Kunci Publik gabungan (ECC + Kyber) akan dibuat di sini..."></textarea>
+                        <button id="copyGenPublicBtn" class="copy-button">Salin</button>
+                    </div>
+                    <div class="fingerprint-group">
+                        <label>Fingerprint Kunci Publik (untuk verifikasi anti-MITM)</label>
+                        <div id="genFingerprint" class="fingerprint-box">Buat kunci untuk melihat fingerprint...</div>
+                        <p class="fingerprint-hint">Bacakan atau kirim fingerprint ini ke lawan bicara Anda lewat jalur lain (telepon, tatap muka, chat terpisah). Jika fingerprint yang mereka lihat berbeda, kunci publik ini mungkin sudah diganti di tengah jalan.</p>
+                    </div>
+                </div>
+                
+                 <div class="input-group">
+                    <label for="genPrivateKey">Kunci Privat Hibrida (JSON - JAGA KERAHASIAANNYA)</label>
+                    <div class="output-group">
+                        <textarea id="genPrivateKey" rows="7" readonly placeholder="Kunci Privat gabungan (ECC + Kyber) akan dibuat di sini..."></textarea>
+                        <button id="copyGenPrivateBtn" class="copy-button">Salin</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="encrypt-view" class="content-section">
+                <h2>Enkripsi Pesan Hibrida</h2>
+                <p class="description">Tempel Kunci Publik Hibrida milik penerima. Proses ini akan menghasilkan rahasia bersama menggunakan ECDH dan mengenkapsulasi rahasia kedua menggunakan Kyber.</p>
+                <div class="input-group">
+                    <label for="publicKey">Kunci Publik Hibrida Penerima (JSON)</label>
+                    <textarea id="publicKey" rows="6" placeholder="Tempel Kunci Publik Hibrida berformat JSON di sini..."></textarea>
+                    <div class="fingerprint-group">
+                        <label>Fingerprint Kunci yang Ditempel</label>
+                        <div id="recipientFingerprint" class="fingerprint-box">—</div>
+                        <p class="fingerprint-hint">Cocokkan teks ini dengan fingerprint yang dibacakan langsung oleh penerima sebelum Anda mengirim pesan rahasia apa pun.</p>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="plainText">Teks Biasa (Plaintext)</label>
+                    <textarea id="plainText" rows="4" placeholder="Tulis pesan rahasia Anda di sini..."></textarea>
+                </div>
+                <button id="encryptBtn" class="action-button">Enkripsi Pesan</button>
+                
+                <div class="input-group" style="margin-top: 30px;">
+                    <label for="encryptedText">Ciphertext Hibrida (Base64)</label>
+                    <div class="output-group">
+                        <textarea id="encryptedText" rows="7" readonly placeholder="Hasil enkripsi akan muncul di sini..."></textarea>
+                        <button id="copyEncryptedBtn" class="copy-button">Salin</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="decrypt-view" class="content-section">
+                <h2>Dekripsi Pesan Hibrida</h2>
+                <p class="description">Gunakan Kunci Privat Hibrida Anda untuk mendekripsi pesan. Alat ini akan merekonstruksi kunci sesi yang sama untuk membuka pesan.</p>
+                <div class="input-group">
+                    <label for="privateKey">Kunci Privat Hibrida Anda (JSON)</label>
+                    <textarea id="privateKey" rows="6" placeholder="Tempel Kunci Privat Hibrida berformat JSON Anda di sini..."></textarea>
+                </div>
+                <div class="input-group">
+                    <label for="cipherText">Ciphertext Hibrida (Base64)</label>
+                    <textarea id="cipherText" rows="7" placeholder="Tempel ciphertext dari pengirim..."></textarea>
+                </div>
+                <button id="decryptBtn" class="action-button">Dekripsi Pesan</button>
+                
+                <div class="input-group" style="margin-top: 30px;">
+                    <label for="decryptedText">Teks Asli (Decrypted)</label>
+                    <div class="output-group">
+                        <textarea id="decryptedText" rows="4" readonly placeholder="Hasil dekripsi akan muncul di sini..."></textarea>
+                        <button id="copyDecryptedBtn" class="copy-button">Salin</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="about-view" class="content-section">
+                <h2>Tentang Protokol Q-EKH</h2>
+                <p class="about-intro">"Saya Adalah Mr. J0121312, website ini kredit dari saya."</p>
+
+                <p><strong>Q-EKH</strong> adalah singkatan dari <strong>Quantum-Elliptic Curve Cryptography Kyber</strong>, sebuah protokol yang menyatukan kekuatan kriptografi kurva eliptik (ECC) dan CRYSTALS-Kyber menjadi kombinasi yang sangat aman.</p>
+                
+                <h3>Mengapa Ini Pilihan yang Bagus?</h3>
+                <ul>
+                    <li><strong>Pertahanan Berlapis (Defense-in-Depth):</strong> Untuk memecahkan enkripsi ini, seorang penyerang harus memecahkan <em>keduanya</em>: ECC dan Kyber.</li>
+                    <li><strong>Kepercayaan pada yang Teruji:</strong> ECC adalah algoritma yang telah dianalisis secara intensif selama puluhan tahun.</li>
+                    <li><strong>Kesiapan untuk Masa Depan:</strong> Dengan menambahkan Kyber (standar ML-KEM dari NIST), sistem Anda aman dari ancaman komputer kuantum.</li>
+                </ul>
+                <blockquote>Analoginya seperti mengamankan brankas dengan dua gembok berbeda jenis. Pencuri tidak hanya harus bisa membuka gembok kunci biasa (ECC), tetapi juga harus bisa membuka gembok biometrik canggih (Kyber).</blockquote>
+
+                <h3>Seberapa Aman Kombinasi Ini?</h3>
+                <ul>
+                    <li><strong>Terhadap Komputer Klasik (Saat Ini): Sangat aman.</strong></li>
+                    <li><strong>Terhadap Komputer Kuantum (Masa Depan): Sangat aman.</strong> Komputer kuantum dapat memecahkan ECC, namun <strong>tidak dapat memecahkan CRYSTALS-Kyber</strong>.</li>
+                </ul>
+
+                <div class="important-notice">
+                    <h3>⚠️ Yang Tidak Bisa Dijamin Oleh Matematika Saja</h3>
+                    <p>ECC dan Kyber melindungi pesan Anda dari <em>pembacaan</em> oleh pihak yang tidak berhak — <strong>asalkan</strong> Kunci Publik yang Anda gunakan untuk mengenkripsi benar-benar milik penerima yang Anda maksud. Protokol ini <strong>tidak memverifikasi identitas pengirim atau penerima</strong>. Jika seseorang berhasil mengganti Kunci Publik yang Anda terima (misalnya saat disalin lewat chat/email yang disadap), Anda bisa saja mengenkripsi pesan untuk penyerang tanpa menyadarinya — dan enkripsi pasca-kuantum sekalipun tidak akan menyelamatkan Anda dari kesalahan ini.</p>
+                    <p>Karena itu, setiap kunci publik sekarang disertai <strong>Fingerprint</strong>: sidik jari singkat dari kunci tersebut. <strong>Selalu cocokkan fingerprint lewat jalur terpisah</strong> (telepon, tatap muka, atau chat lain yang sudah terpercaya) sebelum mengirim pesan rahasia. Ini praktik yang sama seperti "Safety Number" di Signal atau fingerprint kunci PGP.</p>
+                </div>
+
+                <h3>Konsep Kunci Hibrida</h3>
+                <ul>
+                    <li><strong>Kunci Publik (Public Key):</strong> Anggap ini gembok digital yang bisa Anda bagikan.</li>
+                    <li><strong>Kunci Privat (Private Key):</strong> Ini adalah satu-satunya kunci untuk membuka gembok tersebut. <span class="warning">TIDAK BOLEH DIBAGIKAN</span>.</li>
+                </ul>
+                <p>Singkatnya: <strong>Bagikan gemboknya (Publik), simpan kuncinya (Privat).</strong></p>
+
+                <h3>Instruksi Penggunaan</h3>
+                <ol>
+                    <li><strong>Membuat Kunci:</strong> Di tab 1, klik "Buat Pasangan Kunci". Salin Kunci Publik untuk dibagikan, catat Fingerprint yang muncul, dan simpan Kunci Privat Anda baik-baik.</li>
+                    <li><strong>Mengenkripsi:</strong> Di tab 2, tempelkan Kunci Publik penerima, cocokkan Fingerprint yang tampil dengan yang diberikan penerima lewat jalur lain, ketik pesan, lalu klik "Enkripsi Pesan". Kirim hasilnya.</li>
+                    <li><strong>Mendekripsi:</strong> Di tab 3, tempelkan Kunci Privat Anda dan pesan terenkripsi yang diterima. Klik "Dekripsi Pesan".</li>
+                </ol>
+            </div>
+        </main>
+        
+        <footer>
+            <p>Menggunakan Crypto API (ECDH) & (ML-KEM)</p>
+        </footer>
+    </div>
+
+    <script type="module" src="script.js"></script>
+
+</body>
+</html>
