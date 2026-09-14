@@ -8,7 +8,6 @@
     --success-color: #28a745;
     --text-color: #dcdcdc;
     --border-color: #535353;
-    /* Warna fokus yang lebih nyaman */
     --focus-border-color: #87b2f3; 
     --focus-shadow-color: rgba(135, 178, 243, 0.6);
     --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -32,7 +31,6 @@ body {
     padding: 20px;
 }
 
-/* --- Main Container --- */
 .container {
     width: 100%;
     max-width: 800px;
@@ -43,7 +41,6 @@ body {
     border: 1px solid var(--secondary-color);
 }
 
-/* --- Header --- */
 header {
     text-align: center;
     margin-bottom: 25px;
@@ -63,7 +60,6 @@ header p {
     opacity: 0.8;
 }
 
-/* --- Section Headers --- */
 .content-section h2 {
     font-size: 1.5rem;
     color: var(--text-color);
@@ -79,7 +75,6 @@ header p {
     line-height: 1.5;
 }
 
-/* --- Tab Navigation --- */
 .tabs {
     display: flex;
     margin-bottom: 30px;
@@ -121,7 +116,6 @@ header p {
     display: block;
 }
 
-/* --- Form Elements --- */
 .input-group {
     margin-bottom: 25px;
 }
@@ -147,7 +141,6 @@ label {
     font-size: 1rem;
 }
 
-/* Mengganti warna fokus menjadi biru muda */
 textarea:focus, select:focus {
     outline: none;
     border-color: var(--focus-border-color);
@@ -158,7 +151,6 @@ textarea::placeholder {
     color: #888;
 }
 
-/* --- Buttons --- */
 .action-button {
     width: 100%;
     padding: 15px;
@@ -184,12 +176,10 @@ textarea::placeholder {
     transform: none;
 }
 
-/* --- Output Section --- */
 .output-group {
     position: relative; 
 }
 
-/* Gaya khusus untuk textarea yang memiliki tombol salin */
 .output-group textarea {
     background-color: #101522;
     padding-right: 75px; 
@@ -197,10 +187,8 @@ textarea::placeholder {
 
 .copy-button {
     position: absolute;
-    /* [DIUBAH] Posisi lebih ke pojok */
     top: 6px;
     right: 6px;
-    
     background-color: rgba(255, 255, 255, 0.1);
     color: #ccc;
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -209,7 +197,6 @@ textarea::placeholder {
     cursor: pointer;
     font-size: 0.85rem;
     font-family: var(--font-family);
-    /* [DIUBAH] Dibuat lebih transparan */
     opacity: 0.6; 
     transition: all 0.2s ease-in-out;
 }
@@ -251,6 +238,34 @@ textarea::placeholder {
     opacity: 0.65;
     line-height: 1.5;
     margin-top: 8px;
+}
+
+/* --- Verification Status (hasil cek tanda tangan) --- */
+.verification-status {
+    margin-top: 15px;
+    padding: 12px 15px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    display: none;
+}
+.verification-status:not(:empty) {
+    display: block;
+}
+.verification-status.verified {
+    background-color: rgba(40, 167, 69, 0.12);
+    border: 1px solid rgba(40, 167, 69, 0.4);
+    color: #6fdb8a;
+}
+.verification-status.failed {
+    background-color: rgba(233, 69, 96, 0.12);
+    border: 1px solid rgba(233, 69, 96, 0.4);
+    color: #ff8a9a;
+}
+.verification-status.unverified {
+    background-color: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    color: #ffc107;
 }
 
 /* --- Footer --- */
