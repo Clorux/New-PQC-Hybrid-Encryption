@@ -15,7 +15,7 @@
 // sendiri per v0.6.1, bukan audit pihak ketiga independen), dan tidak
 // mengklaim constant-time di JS murni. Wajar untuk proyek pribadi/edukasi,
 // tapi bukan pengganti pustaka bersertifikasi untuk kebutuhan berisiko tinggi.
-import { XWing } from 'https://esm.sh/@noble/post-quantum@0.7.0/hybrid.js';
+import { ml_kem768_x25519 as XWing } from 'https://esm.sh/@noble/post-quantum@0.7.0/hybrid.js';
 import { slh_dsa_sha2_192s } from 'https://esm.sh/@noble/post-quantum@0.7.0/slh-dsa.js';
 
 document.addEventListener('DOMContentLoaded', () => {
