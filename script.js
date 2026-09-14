@@ -1,17 +1,29 @@
-// Mengimpor fungsi ML-KEM (Kyber) level 768 dari pustaka @noble/post-quantum
-// Ini sesuai dengan keamanan setara AES-192, keseimbangan yang baik antara keamanan dan kinerja.
-// Catatan: versi dinaikkan dari 0.5.1 -> 0.7.0 (versi terbaru saat perbaikan ini dibuat)
-// untuk mendapat perbaikan/patch terbaru dari pustaka. Tes ulang generate->enkripsi->dekripsi
-// setelah deploy untuk memastikan semuanya tetap kompatibel.
-import { ml_kem768 } from 'https://esm.sh/@noble/post-quantum@0.7.0/ml-kem.js';
+// Q-EKH Protocol v2 — enkripsi hibrida pasca-kuantum TERAUTENTIKASI.
+//
+// Enkripsi/kesepakatan kunci : X25519 + ML-KEM-768 lewat kombinator X-Wing
+//   (draft-connolly-cfrg-xwing-kem) — dipakai langsung dari pustaka, bukan
+//   digabung manual, supaya kombinasi ECC+PQC-nya mengikuti desain yang
+//   sudah dipublikasikan dan dianalisis, bukan racikan sendiri.
+// Tanda tangan (autentikasi) : Ed25519 (klasik, cepat) + SLH-DSA-SHA2-192s
+//   (berbasis hash, PQ) — DUA tanda tangan sekaligus, keduanya harus valid.
+//   Fondasi matematikanya sengaja beda dari ML-KEM (lattice), jadi lapisan
+//   tanda tangan tetap aman walau suatu saat kriptografi lattice ada celah.
+// Enkripsi pesan : AES-256-GCM, kunci diturunkan lewat HKDF-SHA256 dengan
+//   salt acak per pesan.
+//
+// Catatan jujur: @noble/post-quantum baru "self-audited" (diaudit pembuatnya
+// sendiri per v0.6.1, bukan audit pihak ketiga independen), dan tidak
+// mengklaim constant-time di JS murni. Wajar untuk proyek pribadi/edukasi,
+// tapi bukan pengganti pustaka bersertifikasi untuk kebutuhan berisiko tinggi.
+import { XWing } from 'https://esm.sh/@noble/post-quantum@0.7.0/hybrid.js';
+import { slh_dsa_sha2_192s } from 'https://esm.sh/@noble/post-quantum@0.7.0/slh-dsa.js';
 
 document.addEventListener('DOMContentLoaded', () => {
 
     // --- DOM Element Selection ---
     const tabButtons = document.querySelectorAll('.tab-button');
     const contentSections = document.querySelectorAll('.content-section');
-    
-    // Key Generation elements
+
     const generateBtn = document.getElementById('generateBtn');
     const genPublicKeyEl = document.getElementById('genPublicKey');
     const genPrivateKeyEl = document.getElementById('genPrivateKey');
@@ -19,28 +31,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const copyGenPublicBtn = document.getElementById('copyGenPublicBtn');
     const copyGenPrivateBtn = document.getElementById('copyGenPrivateBtn');
 
-    // Encryption elements
     const publicKeyEl = document.getElementById('publicKey');
     const recipientFingerprintEl = document.getElementById('recipientFingerprint');
+    const senderPrivateKeyEl = document.getElementById('senderPrivateKey');
     const plainTextEl = document.getElementById('plainText');
     const encryptBtn = document.getElementById('encryptBtn');
     const encryptedTextEl = document.getElementById('encryptedText');
     const copyEncryptedBtn = document.getElementById('copyEncryptedBtn');
 
-    // Decryption elements
     const privateKeyEl = document.getElementById('privateKey');
+    const senderVerifyKeyEl = document.getElementById('senderVerifyKey');
+    const senderVerifyFingerprintEl = document.getElementById('senderVerifyFingerprint');
     const cipherTextEl = document.getElementById('cipherText');
     const decryptBtn = document.getElementById('decryptBtn');
     const decryptedTextEl = document.getElementById('decryptedText');
+    const verificationStatusEl = document.getElementById('verificationStatus');
     const copyDecryptedBtn = document.getElementById('copyDecryptedBtn');
 
-    // Versi format payload terenkripsi. Dipakai untuk mendeteksi ciphertext dari versi
-    // protokol lama, agar gagal dengan pesan yang jelas, bukan error yang membingungkan.
-    const PROTOCOL_VERSION = 'QEKH-v1';
-    // String konteks tetap untuk domain-separation di HKDF (bukan rahasia, hanya identitas protokol).
-    const HKDF_INFO = new TextEncoder().encode('QEKH-Hybrid-Key-v1');
+    const PROTOCOL_VERSION = 'QEKH-v2';
+    const HKDF_INFO = new TextEncoder().encode('QEKH-v2-XWing-HKDF');
 
-    // --- Tab Switching Logic ---
+    // --- Tab Switching ---
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
             tabButtons.forEach(btn => btn.classList.remove('active'));
@@ -50,8 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById(`${targetTab}-view`).classList.add('active');
         });
     });
-    
-    // --- Reusable Copy Function ---
+
+    // --- Copy Buttons ---
     const setupCopyButton = (button, textarea) => {
         button.addEventListener('click', () => {
             const textToCopy = textarea.value;
@@ -68,14 +79,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // --- Helper Functions for Key Conversion ---
-    // Dibuat per-chunk (32KB) supaya tidak menabrak batas jumlah argumen saat buffer-nya
-    // besar (misalnya plaintext panjang) - versi lama bisa gagal ("call stack exceeded")
-    // karena memakai spread operator langsung ke argumen fungsi.
+    // --- Byte / Base64 Helpers ---
     const arrayBufferToBase64 = (buffer) => {
-        const bytes = new Uint8Array(buffer);
+        const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
         let binary = '';
-        const chunkSize = 0x8000; // 32KB per chunk
+        const chunkSize = 0x8000; // 32KB per chunk, hindari batas argumen fungsi
         for (let i = 0; i < bytes.length; i += chunkSize) {
             binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
         }
@@ -83,30 +91,34 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const base64ToUint8Array = (base64) => Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 
+    const concatBytes = (...arrays) => {
+        const parts = arrays.map(a => (a instanceof Uint8Array ? a : new Uint8Array(a)));
+        const total = parts.reduce((sum, p) => sum + p.length, 0);
+        const result = new Uint8Array(total);
+        let offset = 0;
+        for (const p of parts) {
+            result.set(p, offset);
+            offset += p.length;
+        }
+        return result;
+    };
+
     // ===================================================================
-    //                  CRYPTO LOGIC (HIBRIDA)
+    //             CRYPTO LOGIC (X-WING + TANDA TANGAN GANDA)
     // ===================================================================
 
-    async function generateEcdhKeys() {
-        return await window.crypto.subtle.generateKey(
-            { name: "ECDH", namedCurve: "P-384" },
-            true, // extractable
-            ["deriveBits"]
+    async function generateSigningKeys() {
+        const ed25519KeyPair = await window.crypto.subtle.generateKey(
+            { name: 'Ed25519' }, true, ['sign', 'verify']
         );
+        const slhKeys = slh_dsa_sha2_192s.keygen();
+        return { ed25519KeyPair, slhKeys };
     }
 
-    function generateKyberKeys() {
-        return ml_kem768.keygen();
-    }
-
-    // Menghitung Fingerprint dari kunci publik hibrida berdasarkan BYTE MENTAH kunci
-    // (bukan dari teks JSON hasil stringify), supaya hasilnya konsisten di semua
-    // browser tanpa tergantung urutan field JWK saat di-serialize.
-    async function computeFingerprint(ecdhPublicKey, kyberPublicKeyBytes) {
-        const rawEcdh = new Uint8Array(await window.crypto.subtle.exportKey('raw', ecdhPublicKey));
-        const combined = new Uint8Array(rawEcdh.length + kyberPublicKeyBytes.length);
-        combined.set(rawEcdh, 0);
-        combined.set(kyberPublicKeyBytes, rawEcdh.length);
+    // Fingerprint dihitung dari byte mentah ketiga kunci publik (X-Wing, Ed25519,
+    // SLH-DSA) sekaligus, supaya mengikat seluruh identitas — bukan cuma sebagian.
+    async function computeFingerprint(xwingPkBytes, ed25519PkBytes, slhdsaPkBytes) {
+        const combined = concatBytes(xwingPkBytes, ed25519PkBytes, slhdsaPkBytes);
         const hashBuffer = await window.crypto.subtle.digest('SHA-256', combined);
         const hex = Array.from(new Uint8Array(hashBuffer))
             .map(b => b.toString(16).padStart(2, '0'))
@@ -115,82 +127,83 @@ document.addEventListener('DOMContentLoaded', () => {
         return hex.match(/.{1,4}/g).join(' ');
     }
 
-    async function deriveHybridKey(ecdhSecretBytes, kyberSecretBytes, salt) {
-        const combinedSecret = new Uint8Array(ecdhSecretBytes.length + kyberSecretBytes.length);
-        combinedSecret.set(ecdhSecretBytes, 0);
-        combinedSecret.set(kyberSecretBytes, ecdhSecretBytes.length);
-
+    async function deriveEncryptionKey(xwingSharedSecret, salt) {
         const importedKey = await window.crypto.subtle.importKey(
-            'raw', combinedSecret, { name: 'HKDF' }, false, ['deriveKey']
+            'raw', xwingSharedSecret, { name: 'HKDF' }, false, ['deriveKey']
         );
-
         const derivedKey = await window.crypto.subtle.deriveKey(
             { name: 'HKDF', salt: salt, info: HKDF_INFO, hash: 'SHA-256' },
             importedKey,
             { name: 'AES-GCM', length: 256 },
-            false, // non-extractable
+            false,
             ['encrypt', 'decrypt']
         );
-
-        // Best-effort "menghapus" rahasia dari memori setelah tidak dipakai lagi.
-        // JS tidak menjamin ini bersih 100% (engine/GC bisa saja sudah menyalinnya
-        // di tempat lain), tapi ini tetap mengurangi jendela waktu rahasia mentah
-        // bertahan di memori.
-        combinedSecret.fill(0);
-        ecdhSecretBytes.fill(0);
-        kyberSecretBytes.fill(0);
-
+        // Best-effort: hapus rahasia mentah dari memori begitu tidak diperlukan lagi.
+        xwingSharedSecret.fill(0);
         return derivedKey;
+    }
+
+    // Byte yang ditandatangani = identitas protokol + semua komponen ciphertext.
+    // Harus dibangun IDENTIK di sisi kirim maupun terima, dalam urutan yang sama.
+    function buildSignablePayload(xwingCipherText, salt, iv, ciphertext) {
+        return concatBytes(
+            new TextEncoder().encode(PROTOCOL_VERSION),
+            xwingCipherText,
+            salt,
+            iv,
+            ciphertext
+        );
     }
 
     async function encryptMessage(key, plaintext) {
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
         const encodedPlaintext = new TextEncoder().encode(plaintext);
         const ciphertext = await window.crypto.subtle.encrypt(
-            { name: "AES-GCM", iv: iv }, key, encodedPlaintext
+            { name: 'AES-GCM', iv: iv }, key, encodedPlaintext
         );
-        return { iv, ciphertext };
+        return { iv, ciphertext: new Uint8Array(ciphertext) };
     }
 
     async function decryptMessage(key, iv, ciphertext) {
         const decrypted = await window.crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: iv }, key, ciphertext
+            { name: 'AES-GCM', iv: iv }, key, ciphertext
         );
         return new TextDecoder().decode(decrypted);
     }
 
-    // --- Key Generation Logic ---
+    // --- Key Generation ---
     generateBtn.addEventListener('click', async () => {
         generateBtn.disabled = true;
         generateBtn.textContent = 'Membuat Kunci...';
-        [genPublicKeyEl, genPrivateKeyEl].forEach(el => el.value = 'Harap tunggu, proses pembuatan kunci hibrida...');
+        [genPublicKeyEl, genPrivateKeyEl].forEach(el => el.value = 'Harap tunggu, membuat 3 pasang kunci (X-Wing, Ed25519, SLH-DSA)...');
         genFingerprintEl.textContent = 'Menghitung...';
 
         try {
-            const [ecdhKeyPair, kyberKeyPair] = await Promise.all([
-                generateEcdhKeys(),
-                generateKyberKeys()
-            ]);
+            const xwingKeys = XWing.keygen();
+            const { ed25519KeyPair, slhKeys } = await generateSigningKeys();
 
-            const ecdhPublicKeyJwk = await window.crypto.subtle.exportKey('jwk', ecdhKeyPair.publicKey);
-            const ecdhPrivateKeyJwk = await window.crypto.subtle.exportKey('jwk', ecdhKeyPair.privateKey);
+            const ed25519PublicRaw = new Uint8Array(await window.crypto.subtle.exportKey('raw', ed25519KeyPair.publicKey));
+            const ed25519PrivatePkcs8 = new Uint8Array(await window.crypto.subtle.exportKey('pkcs8', ed25519KeyPair.privateKey));
 
             const hybridPublicKey = {
-                ecdh: ecdhPublicKeyJwk,
-                kyber: arrayBufferToBase64(kyberKeyPair.publicKey)
+                xwing: arrayBufferToBase64(xwingKeys.publicKey),
+                ed25519: arrayBufferToBase64(ed25519PublicRaw),
+                slhdsa: arrayBufferToBase64(slhKeys.publicKey)
             };
             const hybridPrivateKey = {
-                ecdh: ecdhPrivateKeyJwk,
-                kyber: arrayBufferToBase64(kyberKeyPair.secretKey)
+                xwing: arrayBufferToBase64(xwingKeys.secretKey),
+                ed25519: arrayBufferToBase64(ed25519PrivatePkcs8),
+                slhdsa: arrayBufferToBase64(slhKeys.secretKey)
             };
 
             genPublicKeyEl.value = JSON.stringify(hybridPublicKey, null, 2);
             genPrivateKeyEl.value = JSON.stringify(hybridPrivateKey, null, 2);
-            genFingerprintEl.textContent = await computeFingerprint(ecdhKeyPair.publicKey, kyberKeyPair.publicKey);
+            genFingerprintEl.textContent = await computeFingerprint(xwingKeys.publicKey, ed25519PublicRaw, slhKeys.publicKey);
 
-            // Rahasia (secret key) Kyber mentah sudah tidak diperlukan lagi setelah
-            // di-encode ke base64 di atas.
-            kyberKeyPair.secretKey.fill(0);
+            // Best-effort zeroing rahasia mentah yang sudah tidak diperlukan lagi.
+            xwingKeys.secretKey.fill(0);
+            slhKeys.secretKey.fill(0);
+            ed25519PrivatePkcs8.fill(0);
 
         } catch (error) {
             alert(`Gagal membuat kunci: ${error.message}`);
@@ -202,76 +215,85 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Live Fingerprint Preview saat Kunci Publik Penerima Ditempel ---
+    // --- Live Fingerprint Preview: kunci penerima (tab Enkripsi) ---
     publicKeyEl.addEventListener('input', async () => {
         const raw = publicKeyEl.value.trim();
-        if (!raw) {
-            recipientFingerprintEl.textContent = '—';
-            return;
-        }
+        if (!raw) { recipientFingerprintEl.textContent = '—'; return; }
         try {
             const parsed = JSON.parse(raw);
-            const ecdhKey = await window.crypto.subtle.importKey(
-                'jwk', parsed.ecdh, { name: "ECDH", namedCurve: "P-384" }, true, []
-            );
-            const kyberBytes = base64ToUint8Array(parsed.kyber);
-            recipientFingerprintEl.textContent = await computeFingerprint(ecdhKey, kyberBytes);
+            const xwingPk = base64ToUint8Array(parsed.xwing);
+            const edPk = base64ToUint8Array(parsed.ed25519);
+            const slhPk = base64ToUint8Array(parsed.slhdsa);
+            recipientFingerprintEl.textContent = await computeFingerprint(xwingPk, edPk, slhPk);
         } catch (error) {
             recipientFingerprintEl.textContent = '—';
         }
     });
 
-    // --- Encryption Logic ---
+    // --- Live Fingerprint Preview: kunci pengirim (tab Dekripsi) ---
+    senderVerifyKeyEl.addEventListener('input', async () => {
+        const raw = senderVerifyKeyEl.value.trim();
+        if (!raw) { senderVerifyFingerprintEl.textContent = '—'; return; }
+        try {
+            const parsed = JSON.parse(raw);
+            const xwingPk = base64ToUint8Array(parsed.xwing);
+            const edPk = base64ToUint8Array(parsed.ed25519);
+            const slhPk = base64ToUint8Array(parsed.slhdsa);
+            senderVerifyFingerprintEl.textContent = await computeFingerprint(xwingPk, edPk, slhPk);
+        } catch (error) {
+            senderVerifyFingerprintEl.textContent = '—';
+        }
+    });
+
+    // --- Encryption + Signing ---
     encryptBtn.addEventListener('click', async () => {
         const recipientPublicKeysJSON = publicKeyEl.value.trim();
+        const senderPrivateKeysJSON = senderPrivateKeyEl.value.trim();
         const plainText = plainTextEl.value;
-        if (!recipientPublicKeysJSON || !plainText) {
-            alert('Harap isi Kunci Publik Hibrida penerima dan Teks Biasa.');
+        if (!recipientPublicKeysJSON || !senderPrivateKeysJSON || !plainText) {
+            alert('Harap isi Kunci Publik penerima, Kunci Privat Anda (untuk tanda tangan), dan Teks Biasa.');
             return;
         }
 
         try {
             const recipientPublicKeys = JSON.parse(recipientPublicKeysJSON);
-            const recipientEcdhPublicKey = await window.crypto.subtle.importKey(
-                'jwk', recipientPublicKeys.ecdh, { name: "ECDH", namedCurve: "P-384" }, true, []
+            const recipientXwingPk = base64ToUint8Array(recipientPublicKeys.xwing);
+
+            const senderPrivateKeys = JSON.parse(senderPrivateKeysJSON);
+            const senderEd25519Private = await window.crypto.subtle.importKey(
+                'pkcs8', base64ToUint8Array(senderPrivateKeys.ed25519), { name: 'Ed25519' }, false, ['sign']
             );
-            const recipientKyberPublicKey = base64ToUint8Array(recipientPublicKeys.kyber);
+            const senderSlhSecret = base64ToUint8Array(senderPrivateKeys.slhdsa);
 
-            const senderEcdhKeyPair = await generateEcdhKeys();
-
-            const ecdhSecretBits = await window.crypto.subtle.deriveBits(
-                { name: "ECDH", public: recipientEcdhPublicKey },
-                senderEcdhKeyPair.privateKey,
-                384 // panjang penuh rahasia bersama P-384 (bit) - tidak dipotong
-            );
-            const ecdhSecretBytes = new Uint8Array(ecdhSecretBits);
-
-            const { cipherText: kyberCipherText, sharedSecret: kyberSharedSecret } = ml_kem768.encapsulate(recipientKyberPublicKey);
+            const { cipherText: xwingCipherText, sharedSecret: xwingSharedSecret } = XWing.encapsulate(recipientXwingPk);
 
             const salt = window.crypto.getRandomValues(new Uint8Array(32));
-            const hybridKey = await deriveHybridKey(ecdhSecretBytes, kyberSharedSecret, salt);
-
+            const hybridKey = await deriveEncryptionKey(xwingSharedSecret, salt);
             const { iv, ciphertext } = await encryptMessage(hybridKey, plainText);
 
-            const senderEcdhPublicKeyJwk = await window.crypto.subtle.exportKey('jwk', senderEcdhKeyPair.publicKey);
+            const signablePayload = buildSignablePayload(xwingCipherText, salt, iv, ciphertext);
+            const sigEd25519 = new Uint8Array(await window.crypto.subtle.sign({ name: 'Ed25519' }, senderEd25519Private, signablePayload));
+            const sigSlhDsa = slh_dsa_sha2_192s.sign(signablePayload, senderSlhSecret);
+
             const payload = {
                 version: PROTOCOL_VERSION,
-                senderEcdhPublicKey: senderEcdhPublicKeyJwk,
-                kyberCipherText: arrayBufferToBase64(kyberCipherText),
+                xwingCipherText: arrayBufferToBase64(xwingCipherText),
                 salt: arrayBufferToBase64(salt),
                 iv: arrayBufferToBase64(iv),
-                ciphertext: arrayBufferToBase64(ciphertext)
+                ciphertext: arrayBufferToBase64(ciphertext),
+                sigEd25519: arrayBufferToBase64(sigEd25519),
+                sigSlhDsa: arrayBufferToBase64(sigSlhDsa)
             };
-            
+
             encryptedTextEl.value = btoa(JSON.stringify(payload));
 
         } catch (error) {
-            alert(`Terjadi kesalahan saat enkripsi: ${error.message}`);
+            alert(`Terjadi kesalahan saat enkripsi/tanda tangan: ${error.message}`);
             encryptedTextEl.value = '';
         }
     });
-    
-    // --- Decryption Logic ---
+
+    // --- Decryption + Verification ---
     decryptBtn.addEventListener('click', async () => {
         const privateKeysJSON = privateKeyEl.value.trim();
         const encryptedPayloadB64 = cipherTextEl.value.trim();
@@ -280,45 +302,73 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         decryptedTextEl.value = '';
+        verificationStatusEl.className = 'verification-status';
+        verificationStatusEl.textContent = '';
+
+        let payload, xwingCipherTextBytes, saltBytes, ivBytes, ciphertextBytes;
 
         try {
             const privateKeys = JSON.parse(privateKeysJSON);
-            const recipientEcdhPrivateKey = await window.crypto.subtle.importKey(
-                'jwk', privateKeys.ecdh, { name: "ECDH", namedCurve: "P-384" }, true, ["deriveBits"]
-            );
-            const recipientKyberPrivateKey = base64ToUint8Array(privateKeys.kyber);
+            const ownXwingSecret = base64ToUint8Array(privateKeys.xwing);
 
-            const payload = JSON.parse(atob(encryptedPayloadB64));
-
+            payload = JSON.parse(atob(encryptedPayloadB64));
             if (payload.version !== PROTOCOL_VERSION) {
-                throw new Error('Format ciphertext tidak dikenali (kemungkinan dibuat oleh versi protokol yang lebih lama).');
+                throw new Error('Format ciphertext tidak dikenali (kemungkinan dari versi protokol lain).');
+            }
+            if (!payload.sigEd25519 || !payload.sigSlhDsa) {
+                throw new Error('Ciphertext ini tidak memiliki tanda tangan yang lengkap.');
             }
 
-            const senderEcdhPublicKey = await window.crypto.subtle.importKey(
-                'jwk', payload.senderEcdhPublicKey, { name: "ECDH", namedCurve: "P-384" }, true, []
-            );
-            const kyberCipherText = base64ToUint8Array(payload.kyberCipherText);
-            const salt = base64ToUint8Array(payload.salt);
-            const iv = base64ToUint8Array(payload.iv);
-            const ciphertext = base64ToUint8Array(payload.ciphertext);
+            xwingCipherTextBytes = base64ToUint8Array(payload.xwingCipherText);
+            saltBytes = base64ToUint8Array(payload.salt);
+            ivBytes = base64ToUint8Array(payload.iv);
+            ciphertextBytes = base64ToUint8Array(payload.ciphertext);
 
-            const ecdhSecretBits = await window.crypto.subtle.deriveBits(
-                { name: "ECDH", public: senderEcdhPublicKey },
-                recipientEcdhPrivateKey,
-                384
-            );
-            const ecdhSecretBytes = new Uint8Array(ecdhSecretBits);
-            
-            const kyberSharedSecret = ml_kem768.decapsulate(kyberCipherText, recipientKyberPrivateKey);
+            const xwingSharedSecret = XWing.decapsulate(xwingCipherTextBytes, ownXwingSecret);
+            const hybridKey = await deriveEncryptionKey(xwingSharedSecret, saltBytes);
+            const plaintext = await decryptMessage(hybridKey, ivBytes, ciphertextBytes);
 
-            const hybridKey = await deriveHybridKey(ecdhSecretBytes, kyberSharedSecret, salt);
-
-            const decryptedText = await decryptMessage(hybridKey, iv, ciphertext);
-
-            decryptedTextEl.value = decryptedText;
+            decryptedTextEl.value = plaintext;
 
         } catch (error) {
             decryptedTextEl.value = `ERROR: ${error.message}. Pastikan Kunci Privat dan Ciphertext valid.`;
+            return;
+        }
+
+        // --- Verifikasi tanda tangan, terpisah dari dekripsi di atas ---
+        // (kegagalan verifikasi TIDAK menyembunyikan plaintext yang sudah berhasil
+        // didekripsi — cuma ditandai dengan jelas lewat status di bawah.)
+        const senderPublicJSON = senderVerifyKeyEl.value.trim();
+        if (!senderPublicJSON) {
+            verificationStatusEl.className = 'verification-status unverified';
+            verificationStatusEl.textContent = '⚠️ Tidak diverifikasi — Kunci Publik Pengirim belum diisi. Isi untuk memastikan pesan ini benar dari pengirim yang Anda kenal.';
+            return;
+        }
+
+        try {
+            const senderPublicKeys = JSON.parse(senderPublicJSON);
+            const senderEd25519Public = await window.crypto.subtle.importKey(
+                'raw', base64ToUint8Array(senderPublicKeys.ed25519), { name: 'Ed25519' }, false, ['verify']
+            );
+            const senderSlhPublic = base64ToUint8Array(senderPublicKeys.slhdsa);
+
+            const signablePayload = buildSignablePayload(xwingCipherTextBytes, saltBytes, ivBytes, ciphertextBytes);
+            const sigEd25519 = base64ToUint8Array(payload.sigEd25519);
+            const sigSlhDsa = base64ToUint8Array(payload.sigSlhDsa);
+
+            const edValid = await window.crypto.subtle.verify({ name: 'Ed25519' }, senderEd25519Public, sigEd25519, signablePayload);
+            const slhValid = slh_dsa_sha2_192s.verify(sigSlhDsa, signablePayload, senderSlhPublic);
+
+            if (edValid && slhValid) {
+                verificationStatusEl.className = 'verification-status verified';
+                verificationStatusEl.textContent = '✅ Tanda tangan valid (Ed25519 & SLH-DSA cocok) — pesan ini benar berasal dari pemegang kunci privat yang cocok dengan Kunci Publik Pengirim di atas.';
+            } else {
+                verificationStatusEl.className = 'verification-status failed';
+                verificationStatusEl.textContent = '❌ Tanda tangan TIDAK valid. Pesan ini mungkin dipalsukan atau diubah di tengah jalan — jangan percaya isinya.';
+            }
+        } catch (error) {
+            verificationStatusEl.className = 'verification-status failed';
+            verificationStatusEl.textContent = `❌ Gagal memverifikasi tanda tangan (${error.message}).`;
         }
     });
 
