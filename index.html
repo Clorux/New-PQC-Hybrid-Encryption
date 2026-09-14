@@ -15,6 +15,7 @@
         .content-section .warning { color: #ffc107; font-weight: bold; }
         .content-section .important-notice { background-color: rgba(255, 193, 7, 0.08); border: 1px solid rgba(255, 193, 7, 0.35); border-radius: 8px; padding: 15px 20px; margin: 25px 0; }
         .content-section .important-notice h3 { margin-top: 0; border-left: none; padding-left: 0; color: #ffc107; }
+        .content-section .honesty-note { font-size: 0.85rem; opacity: 0.65; border-top: 1px dashed var(--border-color); padding-top: 15px; margin-top: 30px; }
     </style>
 </head>
 <body>
@@ -22,7 +23,7 @@
     <div class="container">
         <header>
             <h1>Q-EKH Protocol</h1>
-            <p>Enkripsi hibrida pasca-kuantum (ECDH P-384 + ML-KEM Kyber768).</p>
+            <p>Enkripsi &amp; autentikasi hibrida pasca-kuantum (X25519+ML-KEM768 via X-Wing, ditandatangani Ed25519+SLH-DSA).</p>
         </header>
 
         <div class="tabs">
@@ -34,62 +35,66 @@
 
         <main>
             <div id="generate-view" class="content-section active">
-                <h2>Pembuatan Pasangan Kunci Hibrida</h2>
-                <p class="description">Buat pasangan kunci gabungan (ECC + Kyber). Simpan Kunci Privat Anda dengan sangat aman dan bagikan Kunci Publik kepada pengirim pesan.</p>
+                <h2>Pembuatan Identitas Hibrida</h2>
+                <p class="description">Membuat 3 pasang kunci sekaligus: X-Wing (X25519+ML-KEM768) untuk enkripsi, serta Ed25519 dan SLH-DSA-192s untuk tanda tangan. Simpan Kunci Privat Anda dengan sangat aman dan bagikan Kunci Publik + Fingerprint kepada lawan bicara lewat jalur terpisah.</p>
                 <button id="generateBtn" class="action-button">Buat Pasangan Kunci Hibrida Baru</button>
                 
                 <div class="input-group" style="margin-top: 30px;">
                     <label for="genPublicKey">Kunci Publik Hibrida (JSON - Bagikan ini)</label>
                     <div class="output-group">
-                        <textarea id="genPublicKey" rows="7" readonly placeholder="Kunci Publik gabungan (ECC + Kyber) akan dibuat di sini..."></textarea>
+                        <textarea id="genPublicKey" rows="7" readonly placeholder="Kunci Publik gabungan (X-Wing + Ed25519 + SLH-DSA) akan dibuat di sini..."></textarea>
                         <button id="copyGenPublicBtn" class="copy-button">Salin</button>
                     </div>
                     <div class="fingerprint-group">
-                        <label>Fingerprint Kunci Publik (untuk verifikasi anti-MITM)</label>
+                        <label>Fingerprint Identitas (untuk verifikasi anti-MITM)</label>
                         <div id="genFingerprint" class="fingerprint-box">Buat kunci untuk melihat fingerprint...</div>
-                        <p class="fingerprint-hint">Bacakan atau kirim fingerprint ini ke lawan bicara Anda lewat jalur lain (telepon, tatap muka, chat terpisah). Jika fingerprint yang mereka lihat berbeda, kunci publik ini mungkin sudah diganti di tengah jalan.</p>
+                        <p class="fingerprint-hint">Bacakan atau kirim fingerprint ini ke lawan bicara Anda lewat jalur lain (telepon, tatap muka, chat terpisah). Ini yang membuat tanda tangan di bawah benar-benar berarti — tanpa langkah ini, tanda tangan siapa pun bisa "valid" menurut kunci publik siapa pun.</p>
                     </div>
                 </div>
                 
                  <div class="input-group">
                     <label for="genPrivateKey">Kunci Privat Hibrida (JSON - JAGA KERAHASIAANNYA)</label>
                     <div class="output-group">
-                        <textarea id="genPrivateKey" rows="7" readonly placeholder="Kunci Privat gabungan (ECC + Kyber) akan dibuat di sini..."></textarea>
+                        <textarea id="genPrivateKey" rows="7" readonly placeholder="Kunci Privat gabungan (X-Wing + Ed25519 + SLH-DSA) akan dibuat di sini..."></textarea>
                         <button id="copyGenPrivateBtn" class="copy-button">Salin</button>
                     </div>
                 </div>
             </div>
 
             <div id="encrypt-view" class="content-section">
-                <h2>Enkripsi Pesan Hibrida</h2>
-                <p class="description">Tempel Kunci Publik Hibrida milik penerima. Proses ini akan menghasilkan rahasia bersama menggunakan ECDH dan mengenkapsulasi rahasia kedua menggunakan Kyber.</p>
+                <h2>Enkripsi &amp; Tanda Tangan Pesan</h2>
+                <p class="description">Tempel Kunci Publik penerima dan Kunci Privat Anda sendiri (dipakai untuk menandatangani, bukan untuk enkripsi). Pesan dienkripsi ke penerima lewat X-Wing, lalu ditandatangani ganda (Ed25519 + SLH-DSA) pakai identitas Anda.</p>
                 <div class="input-group">
                     <label for="publicKey">Kunci Publik Hibrida Penerima (JSON)</label>
-                    <textarea id="publicKey" rows="6" placeholder="Tempel Kunci Publik Hibrida berformat JSON di sini..."></textarea>
+                    <textarea id="publicKey" rows="6" placeholder="Tempel Kunci Publik Hibrida penerima di sini..."></textarea>
                     <div class="fingerprint-group">
                         <label>Fingerprint Kunci yang Ditempel</label>
                         <div id="recipientFingerprint" class="fingerprint-box">—</div>
-                        <p class="fingerprint-hint">Cocokkan teks ini dengan fingerprint yang dibacakan langsung oleh penerima sebelum Anda mengirim pesan rahasia apa pun.</p>
+                        <p class="fingerprint-hint">Cocokkan dengan fingerprint yang dibacakan langsung oleh penerima sebelum mengirim pesan rahasia.</p>
                     </div>
+                </div>
+                <div class="input-group">
+                    <label for="senderPrivateKey">Kunci Privat Anda (untuk menandatangani pesan ini)</label>
+                    <textarea id="senderPrivateKey" rows="6" placeholder="Tempel Kunci Privat Hibrida Anda sendiri di sini (dipakai untuk tanda tangan, bukan dibagikan ke siapa pun)..."></textarea>
                 </div>
                 <div class="input-group">
                     <label for="plainText">Teks Biasa (Plaintext)</label>
                     <textarea id="plainText" rows="4" placeholder="Tulis pesan rahasia Anda di sini..."></textarea>
                 </div>
-                <button id="encryptBtn" class="action-button">Enkripsi Pesan</button>
+                <button id="encryptBtn" class="action-button">Enkripsi &amp; Tandatangani Pesan</button>
                 
                 <div class="input-group" style="margin-top: 30px;">
                     <label for="encryptedText">Ciphertext Hibrida (Base64)</label>
                     <div class="output-group">
-                        <textarea id="encryptedText" rows="7" readonly placeholder="Hasil enkripsi akan muncul di sini..."></textarea>
+                        <textarea id="encryptedText" rows="7" readonly placeholder="Hasil enkripsi + tanda tangan akan muncul di sini..."></textarea>
                         <button id="copyEncryptedBtn" class="copy-button">Salin</button>
                     </div>
                 </div>
             </div>
 
             <div id="decrypt-view" class="content-section">
-                <h2>Dekripsi Pesan Hibrida</h2>
-                <p class="description">Gunakan Kunci Privat Hibrida Anda untuk mendekripsi pesan. Alat ini akan merekonstruksi kunci sesi yang sama untuk membuka pesan.</p>
+                <h2>Dekripsi &amp; Verifikasi Pesan</h2>
+                <p class="description">Gunakan Kunci Privat Anda untuk membuka pesan. Isi juga Kunci Publik Pengirim (opsional, tapi sangat disarankan) untuk memverifikasi tanda tangannya.</p>
                 <div class="input-group">
                     <label for="privateKey">Kunci Privat Hibrida Anda (JSON)</label>
                     <textarea id="privateKey" rows="6" placeholder="Tempel Kunci Privat Hibrida berformat JSON Anda di sini..."></textarea>
@@ -97,6 +102,15 @@
                 <div class="input-group">
                     <label for="cipherText">Ciphertext Hibrida (Base64)</label>
                     <textarea id="cipherText" rows="7" placeholder="Tempel ciphertext dari pengirim..."></textarea>
+                </div>
+                <div class="input-group">
+                    <label for="senderVerifyKey">Kunci Publik Pengirim (opsional, untuk verifikasi tanda tangan)</label>
+                    <textarea id="senderVerifyKey" rows="6" placeholder="Tempel Kunci Publik Hibrida milik pengirim yang SUDAH Anda verifikasi fingerprint-nya..."></textarea>
+                    <div class="fingerprint-group">
+                        <label>Fingerprint Kunci yang Ditempel</label>
+                        <div id="senderVerifyFingerprint" class="fingerprint-box">—</div>
+                        <p class="fingerprint-hint">Harus cocok dengan fingerprint yang sudah Anda verifikasi langsung dengan pengirim sebelumnya — jangan hanya percaya kunci yang "ikut" di dalam pesan.</p>
+                    </div>
                 </div>
                 <button id="decryptBtn" class="action-button">Dekripsi Pesan</button>
                 
@@ -106,6 +120,7 @@
                         <textarea id="decryptedText" rows="4" readonly placeholder="Hasil dekripsi akan muncul di sini..."></textarea>
                         <button id="copyDecryptedBtn" class="copy-button">Salin</button>
                     </div>
+                    <div id="verificationStatus" class="verification-status"></div>
                 </div>
             </div>
 
@@ -113,46 +128,42 @@
                 <h2>Tentang Protokol Q-EKH</h2>
                 <p class="about-intro">"Saya Adalah Mr. J0121312, website ini kredit dari saya."</p>
 
-                <p><strong>Q-EKH</strong> adalah singkatan dari <strong>Quantum-Elliptic Curve Cryptography Kyber</strong>, sebuah protokol yang menyatukan kekuatan kriptografi kurva eliptik (ECC) dan CRYSTALS-Kyber menjadi kombinasi yang sangat aman.</p>
+                <p><strong>Q-EKH</strong> adalah protokol enkripsi hibrida pasca-kuantum yang TERAUTENTIKASI. Ada dua lapisan yang bekerja terpisah: lapisan <strong>kerahasiaan</strong> (X25519 + ML-KEM-768, digabung lewat kombinator X-Wing) dan lapisan <strong>keaslian pengirim</strong> (Ed25519 + SLH-DSA-192s, tanda tangan ganda).</p>
                 
                 <h3>Mengapa Ini Pilihan yang Bagus?</h3>
                 <ul>
-                    <li><strong>Pertahanan Berlapis (Defense-in-Depth):</strong> Untuk memecahkan enkripsi ini, seorang penyerang harus memecahkan <em>keduanya</em>: ECC dan Kyber.</li>
-                    <li><strong>Kepercayaan pada yang Teruji:</strong> ECC adalah algoritma yang telah dianalisis secara intensif selama puluhan tahun.</li>
-                    <li><strong>Kesiapan untuk Masa Depan:</strong> Dengan menambahkan Kyber (standar ML-KEM dari NIST), sistem Anda aman dari ancaman komputer kuantum.</li>
+                    <li><strong>Kerahasiaan Berlapis:</strong> X-Wing menggabungkan X25519 (ECC klasik) dan ML-KEM-768 (pasca-kuantum) lewat kombinator yang sudah dipublikasikan dan dianalisis (draft-connolly-cfrg-xwing-kem) — bukan digabung asal-asalan, aman selama salah satu dari keduanya belum bisa dipecahkan.</li>
+                    <li><strong>Keaslian Berlapis:</strong> Setiap pesan ditandatangani DUA kali — Ed25519 (klasik, cepat, teruji puluhan tahun) dan SLH-DSA-192s (berbasis fungsi hash, bukan matematika kisi seperti ML-KEM). Keduanya harus valid. Ini sengaja memakai fondasi matematika yang berbeda dari lapisan enkripsi, supaya kalau suatu saat ada celah di kriptografi lattice, tanda tangan Anda tidak ikut runtuh.</li>
+                    <li><strong>Kesiapan Masa Depan:</strong> ML-KEM-768 dan SLH-DSA-192s dirancang tahan komputer kuantum, berdasarkan pengetahuan kriptografi saat ini.</li>
                 </ul>
-                <blockquote>Analoginya seperti mengamankan brankas dengan dua gembok berbeda jenis. Pencuri tidak hanya harus bisa membuka gembok kunci biasa (ECC), tetapi juga harus bisa membuka gembok biometrik canggih (Kyber).</blockquote>
-
-                <h3>Seberapa Aman Kombinasi Ini?</h3>
-                <ul>
-                    <li><strong>Terhadap Komputer Klasik (Saat Ini): Sangat aman.</strong></li>
-                    <li><strong>Terhadap Komputer Kuantum (Masa Depan): Sangat aman.</strong> Komputer kuantum dapat memecahkan ECC, namun <strong>tidak dapat memecahkan CRYSTALS-Kyber</strong>.</li>
-                </ul>
+                <blockquote>Analoginya seperti mengunci brankas dengan dua gembok berbeda jenis (ECC+PQC), lalu menyegelnya dengan dua meterai berbeda jenis juga (klasik+PQC). Penyerang harus membobol satu gembok DAN memalsukan satu meterai — dan dua meterai itu sengaja dibuat dari bahan yang beda total.</blockquote>
 
                 <div class="important-notice">
-                    <h3>⚠️ Yang Tidak Bisa Dijamin Oleh Matematika Saja</h3>
-                    <p>ECC dan Kyber melindungi pesan Anda dari <em>pembacaan</em> oleh pihak yang tidak berhak — <strong>asalkan</strong> Kunci Publik yang Anda gunakan untuk mengenkripsi benar-benar milik penerima yang Anda maksud. Protokol ini <strong>tidak memverifikasi identitas pengirim atau penerima</strong>. Jika seseorang berhasil mengganti Kunci Publik yang Anda terima (misalnya saat disalin lewat chat/email yang disadap), Anda bisa saja mengenkripsi pesan untuk penyerang tanpa menyadarinya — dan enkripsi pasca-kuantum sekalipun tidak akan menyelamatkan Anda dari kesalahan ini.</p>
-                    <p>Karena itu, setiap kunci publik sekarang disertai <strong>Fingerprint</strong>: sidik jari singkat dari kunci tersebut. <strong>Selalu cocokkan fingerprint lewat jalur terpisah</strong> (telepon, tatap muka, atau chat lain yang sudah terpercaya) sebelum mengirim pesan rahasia. Ini praktik yang sama seperti "Safety Number" di Signal atau fingerprint kunci PGP.</p>
+                    <h3>⚠️ Tanda Tangan Hanya Berarti Kalau Kunci Publiknya Sudah Anda Verifikasi</h3>
+                    <p>Tanda tangan digital membuktikan "pesan ini cocok dengan kunci privat pemegang kunci publik X" — tapi TIDAK membuktikan kunci publik X itu benar milik orang yang Anda maksud, kecuali Anda sendiri yang sudah memverifikasinya. Kalau kolom verifikasi diisi kunci yang salah (misalnya milik penyerang), tanda tangan penyerang itu akan tampil "✅ valid" — bukan karena pesannya asli dari orang yang Anda kira, tapi karena memang cocok dengan kunci yang (salah) Anda percaya.</p>
+                    <p>Alur yang benar selalu: <strong>verifikasi Fingerprint lewat jalur terpisah dulu</strong> (telepon/tatap muka), baru simpan Kunci Publik itu sebagai yang dipercaya, baru pakai untuk verifikasi tanda tangan pesan-pesan berikutnya.</p>
                 </div>
 
                 <h3>Konsep Kunci Hibrida</h3>
                 <ul>
-                    <li><strong>Kunci Publik (Public Key):</strong> Anggap ini gembok digital yang bisa Anda bagikan.</li>
-                    <li><strong>Kunci Privat (Private Key):</strong> Ini adalah satu-satunya kunci untuk membuka gembok tersebut. <span class="warning">TIDAK BOLEH DIBAGIKAN</span>.</li>
+                    <li><strong>Kunci Publik (Public Key):</strong> Gembok digital sekaligus meterai verifikasi — boleh dibagikan bebas.</li>
+                    <li><strong>Kunci Privat (Private Key):</strong> Dipakai untuk membuka gembok (dekripsi) DAN membubuhkan meterai (tanda tangan). <span class="warning">TIDAK BOLEH DIBAGIKAN.</span></li>
                 </ul>
-                <p>Singkatnya: <strong>Bagikan gemboknya (Publik), simpan kuncinya (Privat).</strong></p>
+                <p>Singkatnya: <strong>Bagikan gemboknya (Publik), simpan kuncinya (Privat) — kunci yang sama dipakai untuk membuka pesan masuk maupun menandatangani pesan keluar.</strong></p>
 
                 <h3>Instruksi Penggunaan</h3>
                 <ol>
-                    <li><strong>Membuat Kunci:</strong> Di tab 1, klik "Buat Pasangan Kunci". Salin Kunci Publik untuk dibagikan, catat Fingerprint yang muncul, dan simpan Kunci Privat Anda baik-baik.</li>
-                    <li><strong>Mengenkripsi:</strong> Di tab 2, tempelkan Kunci Publik penerima, cocokkan Fingerprint yang tampil dengan yang diberikan penerima lewat jalur lain, ketik pesan, lalu klik "Enkripsi Pesan". Kirim hasilnya.</li>
-                    <li><strong>Mendekripsi:</strong> Di tab 3, tempelkan Kunci Privat Anda dan pesan terenkripsi yang diterima. Klik "Dekripsi Pesan".</li>
+                    <li><strong>Membuat Kunci:</strong> Di tab 1, klik "Buat Pasangan Kunci". Bagikan Kunci Publik dan Fingerprint lewat jalur terpisah, simpan Kunci Privat baik-baik.</li>
+                    <li><strong>Mengenkripsi:</strong> Di tab 2, tempel Kunci Publik penerima (cocokkan fingerprint-nya) DAN Kunci Privat Anda sendiri (untuk tanda tangan), tulis pesan, klik "Enkripsi & Tandatangani".</li>
+                    <li><strong>Mendekripsi:</strong> Di tab 3, tempel Kunci Privat Anda dan ciphertext-nya. Untuk verifikasi, tempel juga Kunci Publik pengirim yang fingerprint-nya sudah Anda cocokkan sebelumnya.</li>
                 </ol>
+
+                <p class="honesty-note">Catatan jujur: primitif pasca-kuantum di sini (ML-KEM, SLH-DSA, X-Wing) berasal dari pustaka <code>@noble/post-quantum</code> yang baru "self-audited" oleh pembuatnya sendiri (per versi 0.6.1), belum lewat audit independen pihak ketiga, dan implementasi JS-nya tidak mengklaim tahan side-channel. Cukup baik untuk proyek pribadi/edukasi seperti ini — bukan pengganti pustaka bersertifikasi untuk sesuatu yang benar-benar berisiko tinggi.</p>
             </div>
         </main>
         
         <footer>
-            <p>Menggunakan Crypto API (ECDH) & (ML-KEM)</p>
+            <p>Menggunakan Web Crypto API (Ed25519, HKDF, AES-GCM) &amp; @noble/post-quantum (X-Wing, SLH-DSA)</p>
         </footer>
     </div>
 
